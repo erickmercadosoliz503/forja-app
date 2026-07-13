@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>FORJA</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0E0F11">
+<style>
+  :root{
+    --bg:#FFFFFF; --bg-card:#F4F6F8; --line:#E3E6EA; --text:#111214; --text-dim:#6B7280;
+    --accent:#5ACAE4; --accent-ink:#06222C; --accent-strong:#1F8FAE; --accent-tint: rgba(90,202,228,0.16);
+    --side-bg:#0E0F11; --side-text:#F5F6F7; --danger:#E4574D; --good:#2F9E52; --radius:14px; font-size:16px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ background:var(--bg); color:var(--text); font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; min-height:100vh; display:flex; justify-content:center; }
+  h1,h3{ font-family:'Arial Narrow','Helvetica Neue',sans-serif; font-weight:800; letter-spacing:0.02em; text-transform:uppercase; }
+  .wrap{ width:100%; max-width:430px; padding:28px 20px 80px 20px; }
+  .topbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:26px; }
+  .brand{ display:flex; align-items:center; gap:9px; }
+  .brand-mark{ width:32px;height:32px;border-radius:8px; background:var(--accent); display:flex;align-items:center;justify-content:center; font-weight:900; color:var(--accent-ink); font-size:15px; }
+  .brand-name{ font-size:1rem; font-weight:800; letter-spacing:0.06em; }
+  .logout{ font-size:0.8rem; color:var(--text-dim); cursor:pointer; border:1px solid var(--line); padding:8px 14px; border-radius:10px; }
+  .logout:hover{ border-color:var(--danger); color:var(--danger); }
+
+  .hero{ background:var(--side-bg); color:#fff; border-radius:var(--radius); padding:22px; margin-bottom:18px; }
+  .hero .lbl{ font-size:0.72rem; color:var(--accent); font-weight:800; letter-spacing:0.08em; text-transform:uppercase; }
+  .hero h1{ font-size:1.25rem; margin-top:8px; text-transform:none; letter-spacing:normal; }
+  .hero p{ font-size:0.82rem; color:#9AA0AA; margin-top:4px; }
+
+  .card{ background:var(--bg-card); border:1px solid var(--line); border-radius:var(--radius); padding:20px; margin-bottom:14px; }
+  .card h3{ font-size:0.72rem; color:var(--text-dim); letter-spacing:0.08em; margin-bottom:10px; }
+  .card p{ font-size:0.86rem; color:var(--text); line-height:1.5; }
+  .card p.dim{ color:var(--text-dim); font-size:0.82rem; }
+
+  .pill{ display:inline-block; margin-top:10px; font-size:0.72rem; font-weight:800; padding:4px 11px; border-radius:20px; }
+  .pill.al_dia{ background:rgba(47,158,82,0.12); color:var(--good); }
+  .pill.pendiente{ background:var(--accent-tint); color:var(--accent-strong); }
+
+  .loading{ text-align:center; padding:60px 0; color:var(--text-dim); font-size:0.85rem; }
+</style>
+</head>
+<body>
+  <div id="loading" class="loading">Cargando tu app…</div>
+
+  <div class="wrap" id="panel" style="display:none;">
+    <div class="topbar">
+      <div class="brand"><div class="brand-mark">F</div><div class="brand-name">FORJA</div></div>
+      <div class="logout" onclick="cerrarSesion()">Cerrar sesión</div>
+    </div>
+
+    <div class="hero">
+      <div class="lbl" id="hero-lbl">Tu entrenador</div>
+      <h1 id="hero-nombre">—</h1>
+      <p id="hero-sub"></p>
+    </div>
+
+    <div class="card">
+      <h3>Tu rutina</h3>
+      <div id="rutina-content"></div>
+    </div>
+
+    <div class="card">
+      <h3>Tu plan</h3>
+      <p class="dim" id="plan-content">Aún no tienes un plan asignado.</p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { escucharSesion, logout } from "./js/auth.js";
+    import { obtenerAlumno, obtenerRutinaActiva } from "./js/alumno.js";
+
+    window.cerrarSesion = () => logout();
+
+    escucharSesion(async (estado) => {
+      const loading = document.getElementById('loading');
+      const panel = document.getElementById('panel');
+
+      if (!estado.autenticado) {
+        window.location.href = 'index.html';
+        return;
+      }
+      if (estado.perfilIncompleto || estado.perfil.rol !== 'alumno') {
+        window.location.href = 'index.html';
+        return;
+      }
+
+      const { perfil, marca } = estado;
+      document.getElementById('hero-nombre').textContent = marca ? marca.nombre : 'Tu entrenador';
+
+      loading.style.display = 'none';
+      panel.style.display = 'block';
+
+      try {
+        const alumno = await obtenerAlumno(perfil.entrenadorId, perfil.alumnoId);
+        if (!alumno) {
+          document.getElementById('hero-sub').textContent = 'No se encontró tu ficha de alumno.';
+          return;
+        }
+        document.getElementById('hero-sub').textContent = `Hola, ${alumno.nombre.split(' ')[0]}`;
+
+        const rutinaEl = document.getElementById('rutina-content');
+        if (alumno.rutinaActivaId) {
+          const rutina = await obtenerRutinaActiva(perfil.entrenadorId, alumno.rutinaActivaId);
+          if (rutina && rutina.dias) {
+            rutinaEl.innerHTML = `<p>Tienes una rutina de <b>${rutina.dias.length} días</b> asignada.</p>`;
+          } else {
+            rutinaEl.innerHTML = `<p class="dim">Tu entrenador está preparando tu rutina.</p>`;
+          }
+        } else {
+          rutinaEl.innerHTML = `<p class="dim">Aún no tienes ninguna rutina asignada. Tu entrenador te la enviará en cuanto la prepare, y te avisaremos aquí.</p>`;
+        }
+
+        const planEl = document.getElementById('plan-content');
+        const estadoPago = alumno.estadoPago || 'pendiente';
+        planEl.innerHTML = alumno.planId
+          ? `Plan activo <span class="pill ${estadoPago}">${estadoPago === 'al_dia' ? 'Al día' : 'Pendiente'}</span>`
+          : `Tu entrenador aún no te ha asignado un plan de pago. <span class="pill ${estadoPago}">${estadoPago === 'al_dia' ? 'Al día' : 'Pendiente'}</span>`;
+      } catch (err) {
+        document.getElementById('rutina-content').innerHTML = `<p class="dim">No se pudo cargar tu información: ${err.message}</p>`;
+      }
+    });
+  </script>
+</body>
+</html>
