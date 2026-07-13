@@ -60,6 +60,17 @@
   .mini-btn{ font-size:0.75rem; font-weight:700; color:var(--accent-strong); cursor:pointer; margin-bottom:10px; display:inline-block; }
   .log-save{ background:var(--accent); color:var(--accent-ink); border:none; padding:9px 16px; border-radius:9px; font-weight:700; font-size:0.8rem; cursor:pointer; width:100%; }
 
+  .history{ margin-top:16px; padding-top:14px; border-top:1px solid var(--line); }
+  .history h4{ font-size:0.7rem; color:var(--text-dim); letter-spacing:0.06em; text-transform:uppercase; margin-bottom:8px; font-weight:800; }
+  .history-row{ display:flex; align-items:center; gap:8px; padding:7px 0; font-size:0.82rem; }
+  .history-row .h-date{ font-size:0.7rem; color:var(--text-dim); width:56px; flex-shrink:0; }
+  .history-row .h-val{ flex:1; font-weight:600; }
+  .history-row .h-actions{ display:flex; gap:5px; }
+  .history-row .h-actions button{ border:none; background:var(--bg-card); border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:0.75rem; }
+  .history-row .h-actions button.del{ color:var(--danger); }
+  .history-row .h-actions button.edit{ color:var(--accent-strong); }
+  .history-row input{ width:56px; border:1px solid var(--line); border-radius:6px; padding:5px; font-size:0.78rem; text-align:center; }
+
   .loading{ text-align:center; padding:60px 0; color:var(--text-dim); font-size:0.85rem; }
   .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0; background:var(--side-bg); color:#fff; padding:12px 20px; border-radius:10px; font-size:0.85rem; font-weight:600; transition:opacity .25s, transform .25s; pointer-events:none; z-index:50; }
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
@@ -97,7 +108,7 @@
 
   <script type="module">
     import { escucharSesion, logout } from "./js/auth.js";
-    import { obtenerAlumno, obtenerRutinaActiva, obtenerRecord, registrarSerie } from "./js/alumno.js";
+    import { obtenerAlumno, obtenerRutinaActiva, obtenerRecord, registrarSerie, obtenerHistorial, actualizarRegistro, eliminarRegistro } from "./js/alumno.js";
 
     window.cerrarSesion = () => logout();
 
@@ -154,17 +165,31 @@
 
       const ex = diasActuales[diaSeleccionado].exercises[i];
       const panel = document.getElementById('log-' + i);
-      panel.innerHTML = `<div class="record-line">Cargando récord…</div>`;
+      panel.innerHTML = `<div class="record-line">Cargando…</div>`;
 
-      const record = await obtenerRecord(entrenadorIdActual, alumnoIdActual, ex.ejercicioId);
+      const [record, historial] = await Promise.all([
+        obtenerRecord(entrenadorIdActual, alumnoIdActual, ex.ejercicioId),
+        obtenerHistorial(entrenadorIdActual, alumnoIdActual, ex.ejercicioId)
+      ]);
       const numSets = ex.series && ex.series > 0 ? ex.series : 1;
       panel.dataset.sets = JSON.stringify(Array.from({ length: numSets }, () => ({ peso: '', reps: '' })));
+      panel.dataset.historial = JSON.stringify(historial);
+      panel.dataset.editando = '';
       renderLogPanel(i, record);
     };
+
+    function formatFecha(fecha){
+      if (!fecha) return '';
+      const d = fecha.toDate ? fecha.toDate() : new Date(fecha);
+      return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    }
 
     function renderLogPanel(i, record){
       const panel = document.getElementById('log-' + i);
       const sets = JSON.parse(panel.dataset.sets || '[{"peso":"","reps":""}]');
+      const historial = JSON.parse(panel.dataset.historial || '[]');
+      const editandoId = panel.dataset.editando || '';
+
       panel.innerHTML = `
         <div class="record-line">
           ${record ? `🏆 Tu récord: <b>${record.peso}kg × ${record.reps} reps</b>` : 'Aún no tienes ningún registro de este ejercicio'}
@@ -183,6 +208,32 @@
         </div>
         <div class="mini-btn" onclick="anadirSet(${i})">+ Añadir serie</div>
         <button class="log-save" onclick="guardarSeries(${i})">Guardar series</button>
+
+        ${historial.length ? `
+          <div class="history">
+            <h4>Tus últimos registros</h4>
+            ${historial.map(h => h.id === editandoId ? `
+              <div class="history-row">
+                <span class="h-date">${formatFecha(h.fecha)}</span>
+                <input type="number" step="0.5" id="edit-peso-${h.id}" value="${h.peso}"> kg ×
+                <input type="number" id="edit-reps-${h.id}" value="${h.reps}"> reps
+                <div class="h-actions">
+                  <button class="edit" onclick="guardarEdicionRegistro(${i}, '${h.id}')">✓</button>
+                  <button class="del" onclick="cancelarEdicionRegistro(${i})">✕</button>
+                </div>
+              </div>
+            ` : `
+              <div class="history-row">
+                <span class="h-date">${formatFecha(h.fecha)}</span>
+                <span class="h-val">${h.peso}kg × ${h.reps} reps</span>
+                <div class="h-actions">
+                  <button class="edit" onclick="editarRegistro(${i}, '${h.id}')">✎</button>
+                  <button class="del" onclick="borrarRegistro(${i}, '${h.id}')">✕</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
       `;
       panel.dataset.record = record ? JSON.stringify(record) : '';
     }
@@ -210,6 +261,54 @@
       renderLogPanel(i, panel.dataset.record ? JSON.parse(panel.dataset.record) : null);
     };
 
+    async function refrescarPanel(i){
+      const ex = diasActuales[diaSeleccionado].exercises[i];
+      const panel = document.getElementById('log-' + i);
+      const [record, historial] = await Promise.all([
+        obtenerRecord(entrenadorIdActual, alumnoIdActual, ex.ejercicioId),
+        obtenerHistorial(entrenadorIdActual, alumnoIdActual, ex.ejercicioId)
+      ]);
+      panel.dataset.historial = JSON.stringify(historial);
+      panel.dataset.editando = '';
+      renderLogPanel(i, record);
+    }
+
+    window.editarRegistro = (i, registroId) => {
+      const panel = document.getElementById('log-' + i);
+      panel.dataset.editando = registroId;
+      renderLogPanel(i, panel.dataset.record ? JSON.parse(panel.dataset.record) : null);
+    };
+
+    window.cancelarEdicionRegistro = (i) => {
+      const panel = document.getElementById('log-' + i);
+      panel.dataset.editando = '';
+      renderLogPanel(i, panel.dataset.record ? JSON.parse(panel.dataset.record) : null);
+    };
+
+    window.guardarEdicionRegistro = async (i, registroId) => {
+      const peso = parseFloat(document.getElementById('edit-peso-' + registroId).value);
+      const reps = parseInt(document.getElementById('edit-reps-' + registroId).value);
+      if (!peso || !reps) { showToast('Pon un peso y unas repeticiones válidas.'); return; }
+      try {
+        await actualizarRegistro(entrenadorIdActual, alumnoIdActual, registroId, { peso, reps });
+        showToast('Registro corregido ✅');
+        await refrescarPanel(i);
+      } catch (err) {
+        showToast('No se pudo corregir: ' + err.message);
+      }
+    };
+
+    window.borrarRegistro = async (i, registroId) => {
+      if (!confirm('¿Borrar este registro? No se puede deshacer.')) return;
+      try {
+        await eliminarRegistro(entrenadorIdActual, alumnoIdActual, registroId);
+        showToast('Registro borrado.');
+        await refrescarPanel(i);
+      } catch (err) {
+        showToast('No se pudo borrar: ' + err.message);
+      }
+    };
+
     window.guardarSeries = async (i) => {
       const panel = document.getElementById('log-' + i);
       const sets = JSON.parse(panel.dataset.sets).filter(s => s.peso && s.reps);
@@ -223,10 +322,9 @@
           });
         }
         showToast('Series guardadas ✅');
-        const record = await obtenerRecord(entrenadorIdActual, alumnoIdActual, ex.ejercicioId);
         const numSets = ex.series && ex.series > 0 ? ex.series : 1;
         panel.dataset.sets = JSON.stringify(Array.from({ length: numSets }, () => ({ peso: '', reps: '' })));
-        renderLogPanel(i, record);
+        await refrescarPanel(i);
       } catch (err) {
         showToast('No se pudo guardar: ' + err.message);
       }
