@@ -25,6 +25,8 @@ export async function registrarEntrenador({ nombre, email, password }) {
   const uid = cred.user.uid;
 
   const codigoInvitacion = generarCodigoInvitacion(nombre);
+  const colorPrimario = "#5ACAE4";
+  const colorSecundario = "#1F8FAE";
 
   // Importante: se crea primero users/{uid}, porque las reglas de seguridad de
   // entrenadores/{uid} comprueban el rol consultando este documento.
@@ -39,14 +41,22 @@ export async function registrarEntrenador({ nombre, email, password }) {
     nombre,
     email,
     codigoInvitacion,
-    colorPrimario: "#5ACAE4",
-    colorSecundario: "#1F8FAE",
+    colorPrimario,
+    colorSecundario,
     logoUrl: "",
     stripeAccountId: null,
     fechaAlta: new Date()
   });
 
-  return { uid, codigoInvitacion };
+  // Se devuelve todo lo necesario para pintar la pantalla al momento,
+  // sin tener que releer Firestore justo después de escribirlo.
+  return {
+    uid,
+    entrenadorId: uid,
+    codigoInvitacion,
+    perfil: { rol: "entrenador", entrenadorId: uid, alumnoId: null },
+    marca: { nombre, codigoInvitacion, colorPrimario, colorSecundario }
+  };
 }
 
 function generarCodigoInvitacion(nombre) {
