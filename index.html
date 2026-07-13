@@ -61,7 +61,7 @@
         <div class="field"><label>Nombre y apellido</label><input type="text" id="reg-nombre" required></div>
         <div class="field"><label>Email</label><input type="email" id="reg-email" required></div>
         <div class="field"><label>Contraseña</label><input type="password" id="reg-password" minlength="6" required></div>
-        <div class="field"><label>Código de invitación de tu entrenador</label><input type="text" id="reg-codigo" required></div>
+        <div class="field"><label>Código de invitación de tu entrenador</label><input type="text" id="reg-codigo" placeholder="Ej. BRABUS2026" required></div>
         <button class="btn" type="submit">Crear cuenta</button>
       </form>
 
@@ -85,7 +85,29 @@
   </div>
 
   <script type="module">
-    import { login, registrarAlumno, registrarEntrenador, escucharSesion, logout } from "./js/auth.js";
+    import { login, registrarAlumno, registrarEntrenador, escucharSesion, logout, cargarMarcaEntrenador } from "./js/auth.js";
+
+    // Mientras estamos registrando una cuenta nueva, ignoramos al listener global:
+    // pintamos la pantalla nosotros mismos con los datos que ya tenemos garantizados.
+    let registrando = false;
+
+    function renderEstado(perfil, marca){
+      document.getElementById('auth-block').style.display = 'none';
+      document.getElementById('status-block').classList.add('active');
+      document.getElementById('status-avatar').textContent = perfil.rol === 'entrenador' ? 'E' : 'A';
+      document.getElementById('status-title').textContent = perfil.rol === 'entrenador' ? 'Panel del entrenador' : 'Bienvenido/a';
+
+      if (perfil.rol === 'entrenador' && marca) {
+        document.getElementById('status-sub').textContent = marca.nombre;
+        document.getElementById('status-next').innerHTML =
+          `Este es tu código de invitación, compártelo con tus alumnos para que se registren:<br>
+           <div style="margin-top:10px; font-size:1.3rem; font-weight:800; letter-spacing:0.05em; color:var(--accent-strong); text-align:center;">${marca.codigoInvitacion}</div>`;
+      } else {
+        document.getElementById('status-sub').textContent = marca ? `Cuenta vinculada a ${marca.nombre}` : 'Sesión iniciada';
+        document.getElementById('status-next').innerHTML =
+          'Cimientos conectados correctamente ✅<br>Siguiente paso: la pantalla de rutina leyendo datos reales de Firestore.';
+      }
+    }
 
     window.switchTab = (name) => {
       document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
@@ -120,30 +142,38 @@
     document.getElementById('form-registro').addEventListener('submit', async (e) => {
       e.preventDefault();
       hideMsg();
+      registrando = true;
       try {
-        await registrarAlumno({
+        const { entrenadorId } = await registrarAlumno({
           nombre: document.getElementById('reg-nombre').value,
           email: document.getElementById('reg-email').value,
           password: document.getElementById('reg-password').value,
           codigoInvitacion: document.getElementById('reg-codigo').value
         });
-        showMsg('Cuenta creada. Entrando…', 'ok');
+        const marca = await cargarMarcaEntrenador(entrenadorId);
+        renderEstado({ rol: 'alumno', entrenadorId }, marca);
       } catch (err) {
         showMsg(traducirError(err), 'error');
+      } finally {
+        registrando = false;
       }
     });
 
     document.getElementById('form-registro-entrenador').addEventListener('submit', async (e) => {
       e.preventDefault();
       hideMsg();
+      registrando = true;
       try {
-        await registrarEntrenador({
+        const { perfil, marca } = await registrarEntrenador({
           nombre: document.getElementById('ent-nombre').value,
           email: document.getElementById('ent-email').value,
           password: document.getElementById('ent-password').value
         });
+        renderEstado(perfil, marca);
       } catch (err) {
         showMsg(traducirError(err), 'error');
+      } finally {
+        registrando = false;
       }
     });
 
@@ -161,8 +191,10 @@
       window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
     }
 
-    // Reacciona al estado de sesión real de Firebase
+    // Reacciona al estado de sesión real de Firebase (login normal, recarga de página, etc.)
     escucharSesion((estado) => {
+      if (registrando) return; // el registro ya está pintando la pantalla por su cuenta
+
       const authBlock = document.getElementById('auth-block');
       const statusBlock = document.getElementById('status-block');
 
@@ -172,29 +204,15 @@
         return;
       }
 
-      authBlock.style.display = 'none';
-      statusBlock.classList.add('active');
-
       if (estado.perfilIncompleto) {
+        authBlock.style.display = 'none';
+        statusBlock.classList.add('active');
         document.getElementById('status-title').textContent = 'Cuenta sin perfil';
         document.getElementById('status-sub').textContent = 'Esta cuenta no tiene un rol asignado todavía.';
         return;
       }
 
-      const { perfil, marca } = estado;
-      document.getElementById('status-avatar').textContent = perfil.rol === 'entrenador' ? 'E' : 'A';
-      document.getElementById('status-title').textContent = perfil.rol === 'entrenador' ? 'Panel del entrenador' : 'Bienvenido/a';
-
-      if (perfil.rol === 'entrenador' && marca) {
-        document.getElementById('status-sub').textContent = marca.nombre;
-        document.getElementById('status-next').innerHTML =
-          `Este es tu código de invitación, compártelo con tus alumnos para que se registren:<br>
-           <div style="margin-top:10px; font-size:1.3rem; font-weight:800; letter-spacing:0.05em; color:var(--accent-strong); text-align:center;">${marca.codigoInvitacion}</div>`;
-      } else {
-        document.getElementById('status-sub').textContent = marca ? `Cuenta vinculada a ${marca.nombre}` : 'Sesión iniciada';
-        document.getElementById('status-next').innerHTML =
-          'Cimientos conectados correctamente ✅<br>Siguiente paso: la pantalla de rutina leyendo datos reales de Firestore.';
-      }
+      renderEstado(estado.perfil, estado.marca);
     });
   </script>
 </body>
