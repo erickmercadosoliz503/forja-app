@@ -105,12 +105,18 @@
         document.getElementById('status-next').innerHTML =
           `Este es tu código de invitación, compártelo con tus alumnos para que se registren:<br>
            <div style="margin-top:10px; font-size:1.3rem; font-weight:800; letter-spacing:0.05em; color:var(--accent-strong); text-align:center;">${marca.codigoInvitacion}</div>`;
-        const boton = document.getElementById('ir-panel');
-        boton.style.display = 'block';
+        document.getElementById('ir-panel').style.display = 'block';
+        document.getElementById('ir-panel').href = 'entrenador.html';
+      } else if (perfil.rol === 'alumno') {
+        document.getElementById('status-sub').textContent = marca ? `Entrenado/a por ${marca.nombre}` : 'Sesión iniciada';
+        document.getElementById('status-next').innerHTML = 'Cuenta creada correctamente ✅';
+        document.getElementById('ir-panel').style.display = 'block';
+        document.getElementById('ir-panel').href = 'alumno.html';
+        document.getElementById('ir-panel').querySelector('button').textContent = 'Ir a mi app';
       } else {
-        document.getElementById('status-sub').textContent = marca ? `Cuenta vinculada a ${marca.nombre}` : 'Sesión iniciada';
-        document.getElementById('status-next').innerHTML =
-          'Cimientos conectados correctamente ✅<br>Siguiente paso: la pantalla de rutina leyendo datos reales de Firestore.';
+        document.getElementById('status-sub').textContent = 'Sesión iniciada';
+        document.getElementById('status-next').innerHTML = '';
+        document.getElementById('ir-panel').style.display = 'none';
       }
     }
 
