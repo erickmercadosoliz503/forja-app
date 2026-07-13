@@ -59,8 +59,9 @@
   .builder-day input.day-label{ font-weight:700; font-size:0.85rem; border:none; background:transparent; width:100%; margin-bottom:8px; padding:2px 0; border-bottom:1px dashed var(--line); }
   .ex-input-row{ display:flex; gap:6px; margin-bottom:6px; }
   .ex-input-row input{ border:1px solid var(--line); border-radius:7px; padding:7px 9px; font-size:0.8rem; }
-  .ex-input-row input.ex-nombre{ flex:1.4; }
-  .ex-input-row input.ex-target{ flex:1; }
+  .ex-input-row input.ex-nombre{ flex:1.6; }
+  .ex-input-row input.ex-series{ flex:0.5; }
+  .ex-input-row input.ex-reps{ flex:0.9; }
   .ex-input-row button{ border:none; background:var(--bg-card); border-radius:7px; width:28px; color:var(--danger); cursor:pointer; font-weight:800; }
   .add-ex-btn{ font-size:0.76rem; color:var(--accent-strong); font-weight:700; cursor:pointer; }
   .builder-actions{ display:flex; gap:8px; margin-top:12px; }
@@ -159,7 +160,7 @@
     const builderState = {};
 
     function nuevoDia(n){
-      return { label: `Día ${n}`, exercises: [{ nombre: '', target: '' }] };
+      return { label: `Día ${n}`, exercises: [{ nombre: '', series: 3, reps: '' }] };
     }
 
     window.toggleStudent = (alumnoId) => {
@@ -181,14 +182,14 @@
     };
 
     window.addEjercicio = (alumnoId, diaIdx) => {
-      builderState[alumnoId].dias[diaIdx].exercises.push({ nombre: '', target: '' });
+      builderState[alumnoId].dias[diaIdx].exercises.push({ nombre: '', series: 3, reps: '' });
       renderBuilder(alumnoId);
     };
 
     window.removeEjercicio = (alumnoId, diaIdx, exIdx) => {
       const dia = builderState[alumnoId].dias[diaIdx];
       dia.exercises.splice(exIdx, 1);
-      if (dia.exercises.length === 0) dia.exercises.push({ nombre: '', target: '' });
+      if (dia.exercises.length === 0) dia.exercises.push({ nombre: '', series: 3, reps: '' });
       renderBuilder(alumnoId);
     };
 
@@ -207,7 +208,8 @@
           ${dia.exercises.map((ex, exIdx) => `
             <div class="ex-input-row">
               <input class="ex-nombre" placeholder="Ejercicio (ej. Press banca)" value="${ex.nombre}" oninput="updateCampo('${alumnoId}', ${diaIdx}, 'nombre', this.value, ${exIdx})">
-              <input class="ex-target" placeholder="4 series × 8-10 reps" value="${ex.target}" oninput="updateCampo('${alumnoId}', ${diaIdx}, 'target', this.value, ${exIdx})">
+              <input class="ex-series" type="number" min="1" max="10" placeholder="series" value="${ex.series}" oninput="updateCampo('${alumnoId}', ${diaIdx}, 'series', this.value, ${exIdx})">
+              <input class="ex-reps" placeholder="8-10 reps" value="${ex.reps}" oninput="updateCampo('${alumnoId}', ${diaIdx}, 'reps', this.value, ${exIdx})">
               <button onclick="removeEjercicio('${alumnoId}', ${diaIdx}, ${exIdx})">✕</button>
             </div>
           `).join('')}
@@ -224,7 +226,12 @@
     window.guardarRutina = async (alumnoId) => {
       const st = builderState[alumnoId];
       const diasValidos = st.dias
-        .map(d => ({ label: d.label || 'Día', exercises: d.exercises.filter(e => e.nombre.trim()) }))
+        .map(d => ({
+          label: d.label || 'Día',
+          exercises: d.exercises
+            .filter(e => e.nombre.trim())
+            .map(e => ({ nombre: e.nombre.trim(), series: parseInt(e.series) || 3, reps: e.reps.trim() }))
+        }))
         .filter(d => d.exercises.length > 0);
 
       if (diasValidos.length === 0) {
