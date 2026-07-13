@@ -1,6 +1,6 @@
 import { db } from "./firebase-config.js";
 import {
-  doc, getDoc, collection, addDoc, query, where, getDocs
+  doc, getDoc, collection, addDoc, updateDoc, deleteDoc, query, where, getDocs
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // ---- Ficha del alumno dentro de su entrenador ----
@@ -37,4 +37,26 @@ export async function registrarSerie(entrenadorId, alumnoId, { ejercicioId, peso
   await addDoc(collection(db, "entrenadores", entrenadorId, "alumnos", alumnoId, "registros"), {
     ejercicioId, peso, reps, serie, fecha: new Date()
   });
+}
+
+// ---- Últimos registros guardados de un ejercicio (para poder revisarlos y corregirlos) ----
+export async function obtenerHistorial(entrenadorId, alumnoId, ejercicioId, limite = 6) {
+  const q = query(
+    collection(db, "entrenadores", entrenadorId, "alumnos", alumnoId, "registros"),
+    where("ejercicioId", "==", ejercicioId)
+  );
+  const snap = await getDocs(q);
+  const registros = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  registros.sort((a, b) => (b.fecha?.toMillis?.() || 0) - (a.fecha?.toMillis?.() || 0));
+  return registros.slice(0, limite);
+}
+
+// ---- Corregir un registro que ya se había guardado ----
+export async function actualizarRegistro(entrenadorId, alumnoId, registroId, { peso, reps }) {
+  await updateDoc(doc(db, "entrenadores", entrenadorId, "alumnos", alumnoId, "registros", registroId), { peso, reps });
+}
+
+// ---- Borrar un registro guardado por error ----
+export async function eliminarRegistro(entrenadorId, alumnoId, registroId) {
+  await deleteDoc(doc(db, "entrenadores", entrenadorId, "alumnos", alumnoId, "registros", registroId));
 }
