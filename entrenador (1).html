@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>FORJA — Panel del entrenador</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0E0F11">
+<style>
+  :root{
+    --bg:#FFFFFF; --bg-card:#F4F6F8; --line:#E3E6EA; --text:#111214; --text-dim:#6B7280;
+    --accent:#5ACAE4; --accent-ink:#06222C; --accent-strong:#1F8FAE; --accent-tint: rgba(90,202,228,0.16);
+    --side-bg:#0E0F11; --side-text:#F5F6F7; --danger:#E4574D; --good:#2F9E52; --radius:14px; font-size:16px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ background:var(--bg); color:var(--text); font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; min-height:100vh; display:flex; justify-content:center; }
+  h1,h2,h3{ font-family:'Arial Narrow','Helvetica Neue',sans-serif; font-weight:800; letter-spacing:0.02em; text-transform:uppercase; }
+  .wrap{ width:100%; max-width:640px; padding:28px 20px 80px 20px; }
+  .topbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:26px; }
+  .brand{ display:flex; align-items:center; gap:9px; }
+  .brand-mark{ width:32px;height:32px;border-radius:8px; background:var(--accent); display:flex;align-items:center;justify-content:center; font-weight:900; color:var(--accent-ink); font-size:15px; }
+  .brand-name{ font-size:1rem; font-weight:800; letter-spacing:0.06em; }
+  .logout{ font-size:0.8rem; color:var(--text-dim); cursor:pointer; border:1px solid var(--line); padding:8px 14px; border-radius:10px; }
+  .logout:hover{ border-color:var(--danger); color:var(--danger); }
+
+  .card{ background:var(--bg-card); border:1px solid var(--line); border-radius:var(--radius); padding:20px; margin-bottom:18px; }
+  .card h3{ font-size:0.75rem; color:var(--text-dim); letter-spacing:0.08em; margin-bottom:16px; }
+
+  .invite-box{ background:var(--side-bg); color:#fff; border-radius:var(--radius); padding:20px; margin-bottom:18px; text-align:center; }
+  .invite-box .lbl{ font-size:0.72rem; color:var(--accent); font-weight:800; letter-spacing:0.08em; text-transform:uppercase; }
+  .invite-code{ font-size:1.7rem; font-weight:800; letter-spacing:0.05em; margin:10px 0; }
+  .invite-copy{ background:var(--accent); color:var(--accent-ink); border:none; padding:9px 16px; border-radius:9px; font-weight:700; font-size:0.78rem; cursor:pointer; }
+
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:0.78rem; font-weight:700; color:var(--text-dim); margin-bottom:6px; }
+  .field input[type=text]{ width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--line); font-size:0.88rem; background:#fff; color:var(--text); }
+  .color-row{ display:flex; gap:14px; }
+  .color-field{ display:flex; align-items:center; gap:10px; flex:1; }
+  .color-field input[type=color]{ width:42px;height:42px;border-radius:9px; border:1px solid var(--line); padding:2px; background:#fff; cursor:pointer; }
+
+  .btn{ background:var(--accent); color:var(--accent-ink); border:none; padding:12px 18px; border-radius:10px; font-weight:700; font-size:0.85rem; cursor:pointer; }
+  .btn:disabled{ opacity:0.6; }
+
+  .student-row{ display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--line); border-radius:11px; padding:12px 14px; cursor:pointer; }
+  .student-card-wrap{ border:1px solid var(--line); border-radius:11px; overflow:hidden; background:#fff; }
+  .student-card-wrap .student-row{ border:none; border-radius:0; }
+  .avatar{ width:38px;height:38px;border-radius:50%; background:var(--side-bg); color:#fff; display:flex;align-items:center;justify-content:center; font-weight:800; font-size:0.82rem; flex-shrink:0; }
+  .student-name{ font-weight:700; font-size:0.88rem; }
+  .student-meta{ font-size:0.74rem; color:var(--text-dim); margin-top:1px; }
+  .pill{ margin-left:auto; font-size:0.68rem; font-weight:800; padding:3px 9px; border-radius:20px; }
+  .pill.al_dia{ background:rgba(47,158,82,0.12); color:var(--good); }
+  .pill.pendiente{ background:var(--accent-tint); color:var(--accent-strong); }
+  .caret{ color:var(--text-dim); font-size:0.75rem; transition:transform .2s; }
+  .student-card-wrap.open .caret{ transform:rotate(180deg); }
+
+  .builder{ display:none; padding:16px 14px; border-top:1px solid var(--line); background:var(--bg-card); }
+  .student-card-wrap.open .builder{ display:block; }
+  .builder-day{ background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; }
+  .builder-day input.day-label{ font-weight:700; font-size:0.85rem; border:none; background:transparent; width:100%; margin-bottom:8px; padding:2px 0; border-bottom:1px dashed var(--line); }
+  .ex-input-row{ display:flex; gap:6px; margin-bottom:6px; }
+  .ex-input-row input{ border:1px solid var(--line); border-radius:7px; padding:7px 9px; font-size:0.8rem; }
+  .ex-input-row input.ex-nombre{ flex:1.4; }
+  .ex-input-row input.ex-target{ flex:1; }
+  .ex-input-row button{ border:none; background:var(--bg-card); border-radius:7px; width:28px; color:var(--danger); cursor:pointer; font-weight:800; }
+  .add-ex-btn{ font-size:0.76rem; color:var(--accent-strong); font-weight:700; cursor:pointer; }
+  .builder-actions{ display:flex; gap:8px; margin-top:12px; }
+  .builder-actions .btn-secondary{ background:#fff; border:1px solid var(--line); color:var(--text); padding:10px 14px; border-radius:9px; font-size:0.8rem; font-weight:700; cursor:pointer; }
+  .students-list{ display:flex; flex-direction:column; gap:10px; }
+
+  .empty{ text-align:center; padding:26px 10px; color:var(--text-dim); font-size:0.85rem; }
+
+  .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0; background:var(--side-bg); color:#fff; padding:12px 20px; border-radius:10px; font-size:0.85rem; font-weight:600; transition:opacity .25s, transform .25s; pointer-events:none; z-index:50; }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .loading{ text-align:center; padding:60px 0; color:var(--text-dim); font-size:0.85rem; }
+</style>
+</head>
+<body>
+  <div id="loading" class="loading">Cargando tu panel…</div>
+
+  <div class="wrap" id="panel" style="display:none;">
+    <div class="topbar">
+      <div class="brand"><div class="brand-mark">F</div><div class="brand-name">FORJA</div></div>
+      <div class="logout" onclick="cerrarSesion()">Cerrar sesión</div>
+    </div>
+
+    <div class="invite-box">
+      <div class="lbl">Tu código de invitación</div>
+      <div class="invite-code" id="codigo-display">—</div>
+      <button class="invite-copy" onclick="copiarCodigo()">Copiar código</button>
+    </div>
+
+    <div class="card">
+      <h3>Tu marca</h3>
+      <div class="field"><label>Nombre del negocio</label><input type="text" id="f-nombre"></div>
+      <div class="field"><label>URL del logo (opcional, de momento como enlace)</label><input type="text" id="f-logo" placeholder="https://..."></div>
+      <div class="field">
+        <label>Colores</label>
+        <div class="color-row">
+          <div class="color-field"><input type="color" id="f-color1"><span style="font-size:0.8rem; color:var(--text-dim);">Principal</span></div>
+          <div class="color-field"><input type="color" id="f-color2"><span style="font-size:0.8rem; color:var(--text-dim);">Secundario</span></div>
+        </div>
+      </div>
+      <button class="btn" id="btn-guardar" onclick="guardarMarca()">Guardar cambios</button>
+    </div>
+
+    <div class="card">
+      <h3 id="alumnos-titulo">Tus alumnos</h3>
+      <div class="students-list" id="students-list"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module">
+    import { escucharSesion, logout } from "./js/auth.js";
+    import { actualizarMarca, listarAlumnos, crearYAsignarRutina } from "./js/entrenador.js";
+
+    let entrenadorIdActual = null;
+    let codigoActual = "";
+
+    let toastTimer;
+    window.showToast = (msg) => {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(()=> t.classList.remove('show'), 2600);
+    };
+
+    window.cerrarSesion = () => logout();
+
+    window.copiarCodigo = () => {
+      navigator.clipboard.writeText(codigoActual).then(() => showToast('Código copiado al portapapeles.'));
+    };
+
+    window.guardarMarca = async () => {
+      const btn = document.getElementById('btn-guardar');
+      btn.disabled = true;
+      btn.textContent = 'Guardando…';
+      try {
+        await actualizarMarca(entrenadorIdActual, {
+          nombre: document.getElementById('f-nombre').value,
+          logoUrl: document.getElementById('f-logo').value,
+          colorPrimario: document.getElementById('f-color1').value,
+          colorSecundario: document.getElementById('f-color2').value
+        });
+        document.documentElement.style.setProperty('--accent', document.getElementById('f-color1').value);
+        document.documentElement.style.setProperty('--accent-strong', document.getElementById('f-color2').value);
+        showToast('Cambios guardados.');
+      } catch (err) {
+        showToast('No se pudo guardar: ' + (err.message || 'error desconocido'));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Guardar cambios';
+      }
+    };
+
+    // Estado local del editor de rutina por alumno (solo mientras se está creando, no persiste hasta Guardar)
+    const builderState = {};
+
+    function nuevoDia(n){
+      return { label: `Día ${n}`, exercises: [{ nombre: '', target: '' }] };
+    }
+
+    window.toggleStudent = (alumnoId) => {
+      const wrap = document.getElementById('card-' + alumnoId);
+      const yaAbierta = wrap.classList.contains('open');
+      document.querySelectorAll('.student-card-wrap.open').forEach(w => w.classList.remove('open'));
+      if (yaAbierta) return;
+      wrap.classList.add('open');
+      if (!builderState[alumnoId]) {
+        builderState[alumnoId] = { dias: [nuevoDia(1)] };
+      }
+      renderBuilder(alumnoId);
+    };
+
+    window.addDia = (alumnoId) => {
+      const st = builderState[alumnoId];
+      st.dias.push(nuevoDia(st.dias.length + 1));
+      renderBuilder(alumnoId);
+    };
+
+    window.addEjercicio = (alumnoId, diaIdx) => {
+      builderState[alumnoId].dias[diaIdx].exercises.push({ nombre: '', target: '' });
+      renderBuilder(alumnoId);
+    };
+
+    window.removeEjercicio = (alumnoId, diaIdx, exIdx) => {
+      const dia = builderState[alumnoId].dias[diaIdx];
+      dia.exercises.splice(exIdx, 1);
+      if (dia.exercises.length === 0) dia.exercises.push({ nombre: '', target: '' });
+      renderBuilder(alumnoId);
+    };
+
+    window.updateCampo = (alumnoId, diaIdx, campo, valor, exIdx) => {
+      const dia = builderState[alumnoId].dias[diaIdx];
+      if (campo === 'label') dia.label = valor;
+      else dia.exercises[exIdx][campo] = valor;
+    };
+
+    function renderBuilder(alumnoId){
+      const cont = document.getElementById('builder-' + alumnoId);
+      const st = builderState[alumnoId];
+      cont.innerHTML = st.dias.map((dia, diaIdx) => `
+        <div class="builder-day">
+          <input class="day-label" value="${dia.label}" oninput="updateCampo('${alumnoId}', ${diaIdx}, 'label', this.value)">
+          ${dia.exercises.map((ex, exIdx) => `
+            <div class="ex-input-row">
+              <input class="ex-nombre" placeholder="Ejercicio (ej. Press banca)" value="${ex.nombre}" oninput="updateCampo('${alumnoId}', ${diaIdx}, 'nombre', this.value, ${exIdx})">
+              <input class="ex-target" placeholder="4 series × 8-10 reps" value="${ex.target}" oninput="updateCampo('${alumnoId}', ${diaIdx}, 'target', this.value, ${exIdx})">
+              <button onclick="removeEjercicio('${alumnoId}', ${diaIdx}, ${exIdx})">✕</button>
+            </div>
+          `).join('')}
+          <div class="add-ex-btn" onclick="addEjercicio('${alumnoId}', ${diaIdx})">+ Añadir ejercicio</div>
+        </div>
+      `).join('') + `
+        <div class="builder-actions">
+          <button class="btn-secondary" onclick="addDia('${alumnoId}')">+ Añadir día</button>
+          <button class="btn" onclick="guardarRutina('${alumnoId}')">Guardar y asignar rutina</button>
+        </div>
+      `;
+    }
+
+    window.guardarRutina = async (alumnoId) => {
+      const st = builderState[alumnoId];
+      const diasValidos = st.dias
+        .map(d => ({ label: d.label || 'Día', exercises: d.exercises.filter(e => e.nombre.trim()) }))
+        .filter(d => d.exercises.length > 0);
+
+      if (diasValidos.length === 0) {
+        showToast('Añade al menos un ejercicio con nombre antes de guardar.');
+        return;
+      }
+      try {
+        await crearYAsignarRutina(entrenadorIdActual, alumnoId, {
+          semana: new Date().toISOString().slice(0, 10),
+          dias: diasValidos
+        });
+        showToast('Rutina guardada y asignada.');
+        cargarAlumnos(entrenadorIdActual);
+      } catch (err) {
+        showToast('No se pudo guardar la rutina: ' + err.message);
+      }
+    };
+
+    async function cargarAlumnos(entrenadorId){
+      const lista = document.getElementById('students-list');
+      const titulo = document.getElementById('alumnos-titulo');
+      try {
+        const alumnos = await listarAlumnos(entrenadorId);
+        titulo.textContent = `Tus alumnos (${alumnos.length})`;
+        if (alumnos.length === 0) {
+          lista.innerHTML = `<div class="empty">Aún no tienes alumnos.<br>Comparte tu código de invitación para que se registren.</div>`;
+          return;
+        }
+        lista.innerHTML = alumnos.map(a => `
+          <div class="student-card-wrap" id="card-${a.id}">
+            <div class="student-row" onclick="toggleStudent('${a.id}')">
+              <div class="avatar">${a.iniciales || '?'}</div>
+              <div>
+                <div class="student-name">${a.nombre || 'Sin nombre'}</div>
+                <div class="student-meta">${a.rutinaActivaId ? 'Rutina asignada' : 'Sin rutina todavía'}</div>
+              </div>
+              <span class="pill ${a.estadoPago || 'pendiente'}">${a.estadoPago === 'al_dia' ? 'Al día' : 'Pendiente'}</span>
+              <span class="caret">▾</span>
+            </div>
+            <div class="builder" id="builder-${a.id}"></div>
+          </div>
+        `).join('');
+      } catch (err) {
+        lista.innerHTML = `<div class="empty">No se pudieron cargar los alumnos: ${err.message}</div>`;
+      }
+    }
+
+    escucharSesion(async (estado) => {
+      const loading = document.getElementById('loading');
+      const panel = document.getElementById('panel');
+
+      if (!estado.autenticado) {
+        window.location.href = 'index.html';
+        return;
+      }
+      if (estado.perfilIncompleto || estado.perfil.rol !== 'entrenador') {
+        // Esta pantalla es solo para entrenadores
+        window.location.href = 'index.html';
+        return;
+      }
+
+      const { perfil, marca } = estado;
+      entrenadorIdActual = perfil.entrenadorId;
+      codigoActual = marca ? marca.codigoInvitacion : '';
+
+      document.getElementById('codigo-display').textContent = codigoActual || '—';
+      document.getElementById('f-nombre').value = marca ? marca.nombre : '';
+      document.getElementById('f-logo').value = marca && marca.logoUrl ? marca.logoUrl : '';
+      document.getElementById('f-color1').value = marca && marca.colorPrimario ? marca.colorPrimario : '#5ACAE4';
+      document.getElementById('f-color2').value = marca && marca.colorSecundario ? marca.colorSecundario : '#1F8FAE';
+
+      loading.style.display = 'none';
+      panel.style.display = 'block';
+
+      cargarAlumnos(entrenadorIdActual);
+    });
+  </script>
+</body>
+</html>
