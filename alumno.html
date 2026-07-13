@@ -37,7 +37,32 @@
   .pill.al_dia{ background:rgba(47,158,82,0.12); color:var(--good); }
   .pill.pendiente{ background:var(--accent-tint); color:var(--accent-strong); }
 
+  .day-strip{ display:flex; gap:8px; margin-bottom:14px; overflow-x:auto; }
+  .day-pill{ flex-shrink:0; padding:8px 14px; border-radius:10px; background:#fff; border:1px solid var(--line); font-size:0.78rem; font-weight:700; color:var(--text-dim); cursor:pointer; }
+  .day-pill.on{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+
+  .exercise-card{ background:#fff; border:1px solid var(--line); border-radius:11px; margin-bottom:9px; overflow:hidden; }
+  .exercise-row{ display:flex; align-items:center; gap:10px; padding:12px 13px; cursor:pointer; }
+  .exercise-row .ex-name{ font-weight:700; font-size:0.86rem; }
+  .exercise-row .ex-target{ font-size:0.74rem; color:var(--text-dim); margin-top:2px; }
+  .exercise-row .caret{ margin-left:auto; color:var(--text-dim); font-size:0.75rem; transition:transform .2s; }
+  .exercise-card.open .caret{ transform:rotate(180deg); }
+  .log-panel{ display:none; padding:0 13px 14px 13px; border-top:1px solid var(--line); }
+  .exercise-card.open .log-panel{ display:block; }
+  .record-line{ font-size:0.76rem; color:var(--text-dim); margin:10px 0 8px 0; }
+  .record-line b{ color:var(--text); }
+  .set-rows{ display:flex; flex-direction:column; gap:7px; margin-bottom:10px; }
+  .set-row{ display:flex; align-items:center; gap:7px; }
+  .set-row span.lbl{ width:52px; font-size:0.75rem; font-weight:700; color:var(--text-dim); }
+  .set-row input{ width:60px; border:1px solid var(--line); border-radius:7px; padding:7px; font-size:0.8rem; text-align:center; }
+  .set-row span.unit{ font-size:0.75rem; color:var(--text-dim); }
+  .set-row button{ margin-left:auto; border:none; background:var(--bg-card); border-radius:7px; width:26px; height:26px; color:var(--danger); cursor:pointer; }
+  .mini-btn{ font-size:0.75rem; font-weight:700; color:var(--accent-strong); cursor:pointer; margin-bottom:10px; display:inline-block; }
+  .log-save{ background:var(--accent); color:var(--accent-ink); border:none; padding:9px 16px; border-radius:9px; font-weight:700; font-size:0.8rem; cursor:pointer; width:100%; }
+
   .loading{ text-align:center; padding:60px 0; color:var(--text-dim); font-size:0.85rem; }
+  .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0; background:var(--side-bg); color:#fff; padding:12px 20px; border-radius:10px; font-size:0.85rem; font-weight:600; transition:opacity .25s, transform .25s; pointer-events:none; z-index:50; }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
@@ -58,6 +83,8 @@
     <div class="card">
       <h3>Tu rutina</h3>
       <div id="rutina-content"></div>
+      <div id="day-strip" class="day-strip"></div>
+      <div id="exercise-list"></div>
     </div>
 
     <div class="card">
@@ -66,44 +93,172 @@
     </div>
   </div>
 
+  <div class="toast" id="toast"></div>
+
   <script type="module">
     import { escucharSesion, logout } from "./js/auth.js";
-    import { obtenerAlumno, obtenerRutinaActiva } from "./js/alumno.js";
+    import { obtenerAlumno, obtenerRutinaActiva, obtenerRecord, registrarSerie } from "./js/alumno.js";
 
     window.cerrarSesion = () => logout();
+
+    let toastTimer;
+    window.showToast = (msg) => {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(()=> t.classList.remove('show'), 2600);
+    };
+
+    let entrenadorIdActual = null;
+    let alumnoIdActual = null;
+    let diasActuales = [];
+    let diaSeleccionado = 0;
+
+    function renderDayStrip(){
+      document.getElementById('day-strip').innerHTML = diasActuales.map((d, i) =>
+        `<div class="day-pill ${i === diaSeleccionado ? 'on' : ''}" onclick="seleccionarDia(${i})">Día ${i+1}</div>`
+      ).join('');
+    }
+
+    window.seleccionarDia = (i) => {
+      diaSeleccionado = i;
+      renderDayStrip();
+      renderEjercicios();
+    };
+
+    function renderEjercicios(){
+      const dia = diasActuales[diaSeleccionado];
+      const cont = document.getElementById('exercise-list');
+      if (!dia) { cont.innerHTML = ''; return; }
+      cont.innerHTML = `<h3 style="margin-bottom:10px;">${dia.label}</h3>` + dia.exercises.map((ex, i) => `
+        <div class="exercise-card" id="ex-${i}">
+          <div class="exercise-row" onclick="toggleEjercicio(${i})">
+            <div>
+              <div class="ex-name">${ex.nombre}</div>
+              <div class="ex-target">${ex.target || ''}</div>
+            </div>
+            <div class="caret">▾</div>
+          </div>
+          <div class="log-panel" id="log-${i}"></div>
+        </div>
+      `).join('');
+    }
+
+    window.toggleEjercicio = async (i) => {
+      const card = document.getElementById('ex-' + i);
+      const abrir = !card.classList.contains('open');
+      document.querySelectorAll('.exercise-card.open').forEach(c => c.classList.remove('open'));
+      if (!abrir) return;
+      card.classList.add('open');
+
+      const ex = diasActuales[diaSeleccionado].exercises[i];
+      const panel = document.getElementById('log-' + i);
+      panel.innerHTML = `<div class="record-line">Cargando récord…</div>`;
+
+      const record = await obtenerRecord(entrenadorIdActual, alumnoIdActual, ex.ejercicioId);
+      panel.dataset.sets = JSON.stringify([{ peso: '', reps: '' }]);
+      renderLogPanel(i, record);
+    };
+
+    function renderLogPanel(i, record){
+      const panel = document.getElementById('log-' + i);
+      const sets = JSON.parse(panel.dataset.sets || '[{"peso":"","reps":""}]');
+      panel.innerHTML = `
+        <div class="record-line">
+          ${record ? `🏆 Tu récord: <b>${record.peso}kg × ${record.reps} reps</b>` : 'Aún no tienes ningún registro de este ejercicio'}
+        </div>
+        <div class="set-rows" id="setrows-${i}">
+          ${sets.map((s, si) => `
+            <div class="set-row">
+              <span class="lbl">Serie ${si+1}</span>
+              <input type="number" step="0.5" placeholder="kg" value="${s.peso}" oninput="actualizarSet(${i}, ${si}, 'peso', this.value)">
+              <span class="unit">kg ×</span>
+              <input type="number" placeholder="reps" value="${s.reps}" oninput="actualizarSet(${i}, ${si}, 'reps', this.value)">
+              <span class="unit">reps</span>
+              ${sets.length > 1 ? `<button onclick="quitarSet(${i}, ${si})">✕</button>` : ''}
+            </div>
+          `).join('')}
+        </div>
+        <div class="mini-btn" onclick="anadirSet(${i})">+ Añadir serie</div>
+        <button class="log-save" onclick="guardarSeries(${i})">Guardar series</button>
+      `;
+      panel.dataset.record = record ? JSON.stringify(record) : '';
+    }
+
+    window.actualizarSet = (i, si, campo, valor) => {
+      const panel = document.getElementById('log-' + i);
+      const sets = JSON.parse(panel.dataset.sets);
+      sets[si][campo] = valor;
+      panel.dataset.sets = JSON.stringify(sets);
+    };
+
+    window.anadirSet = (i) => {
+      const panel = document.getElementById('log-' + i);
+      const sets = JSON.parse(panel.dataset.sets);
+      sets.push({ peso: '', reps: '' });
+      panel.dataset.sets = JSON.stringify(sets);
+      renderLogPanel(i, panel.dataset.record ? JSON.parse(panel.dataset.record) : null);
+    };
+
+    window.quitarSet = (i, si) => {
+      const panel = document.getElementById('log-' + i);
+      const sets = JSON.parse(panel.dataset.sets);
+      sets.splice(si, 1);
+      panel.dataset.sets = JSON.stringify(sets);
+      renderLogPanel(i, panel.dataset.record ? JSON.parse(panel.dataset.record) : null);
+    };
+
+    window.guardarSeries = async (i) => {
+      const panel = document.getElementById('log-' + i);
+      const sets = JSON.parse(panel.dataset.sets).filter(s => s.peso && s.reps);
+      if (sets.length === 0) { showToast('Añade al menos una serie con peso y repeticiones.'); return; }
+
+      const ex = diasActuales[diaSeleccionado].exercises[i];
+      try {
+        for (let si = 0; si < sets.length; si++) {
+          await registrarSerie(entrenadorIdActual, alumnoIdActual, {
+            ejercicioId: ex.ejercicioId, peso: parseFloat(sets[si].peso), reps: parseInt(sets[si].reps), serie: si + 1
+          });
+        }
+        showToast('Series guardadas ✅');
+        const record = await obtenerRecord(entrenadorIdActual, alumnoIdActual, ex.ejercicioId);
+        panel.dataset.sets = JSON.stringify([{ peso: '', reps: '' }]);
+        renderLogPanel(i, record);
+      } catch (err) {
+        showToast('No se pudo guardar: ' + err.message);
+      }
+    };
 
     escucharSesion(async (estado) => {
       const loading = document.getElementById('loading');
       const panel = document.getElementById('panel');
 
-      if (!estado.autenticado) {
-        window.location.href = 'index.html';
-        return;
-      }
-      if (estado.perfilIncompleto || estado.perfil.rol !== 'alumno') {
-        window.location.href = 'index.html';
-        return;
-      }
+      if (!estado.autenticado) { window.location.href = 'index.html'; return; }
+      if (estado.perfilIncompleto || estado.perfil.rol !== 'alumno') { window.location.href = 'index.html'; return; }
 
       const { perfil, marca } = estado;
+      entrenadorIdActual = perfil.entrenadorId;
+      alumnoIdActual = perfil.alumnoId;
       document.getElementById('hero-nombre').textContent = marca ? marca.nombre : 'Tu entrenador';
 
       loading.style.display = 'none';
       panel.style.display = 'block';
 
       try {
-        const alumno = await obtenerAlumno(perfil.entrenadorId, perfil.alumnoId);
-        if (!alumno) {
-          document.getElementById('hero-sub').textContent = 'No se encontró tu ficha de alumno.';
-          return;
-        }
+        const alumno = await obtenerAlumno(entrenadorIdActual, alumnoIdActual);
+        if (!alumno) { document.getElementById('hero-sub').textContent = 'No se encontró tu ficha de alumno.'; return; }
         document.getElementById('hero-sub').textContent = `Hola, ${alumno.nombre.split(' ')[0]}`;
 
         const rutinaEl = document.getElementById('rutina-content');
         if (alumno.rutinaActivaId) {
-          const rutina = await obtenerRutinaActiva(perfil.entrenadorId, alumno.rutinaActivaId);
-          if (rutina && rutina.dias) {
-            rutinaEl.innerHTML = `<p>Tienes una rutina de <b>${rutina.dias.length} días</b> asignada.</p>`;
+          const rutina = await obtenerRutinaActiva(entrenadorIdActual, alumno.rutinaActivaId);
+          if (rutina && rutina.dias && rutina.dias.length) {
+            rutinaEl.innerHTML = '';
+            diasActuales = rutina.dias;
+            diaSeleccionado = 0;
+            renderDayStrip();
+            renderEjercicios();
           } else {
             rutinaEl.innerHTML = `<p class="dim">Tu entrenador está preparando tu rutina.</p>`;
           }
