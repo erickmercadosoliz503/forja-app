@@ -1,0 +1,77 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function usuario() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function estaAutenticado() {
+      return request.auth != null;
+    }
+
+    function esEsteEntrenador(entrenadorId) {
+      return estaAutenticado() &&
+             usuario().rol == 'entrenador' &&
+             usuario().entrenadorId == entrenadorId;
+    }
+
+    function esEsteAlumno(entrenadorId, alumnoId) {
+      return estaAutenticado() &&
+             usuario().rol == 'alumno' &&
+             usuario().entrenadorId == entrenadorId &&
+             usuario().alumnoId == alumnoId;
+    }
+
+    // Cada persona solo puede leer/crear su propio documento de usuario
+    match /users/{uid} {
+      allow read: if estaAutenticado() && request.auth.uid == uid;
+      allow create: if estaAutenticado() && request.auth.uid == uid;
+      allow update: if false; // el rol/entrenadorId no se modifica desde el cliente
+    }
+
+    match /entrenadores/{entrenadorId} {
+      // cualquier persona autenticada puede leer datos públicos del entrenador
+      // (necesario para pintar marca/logo antes de terminar el registro)
+      allow read: if estaAutenticado();
+      allow write: if esEsteEntrenador(entrenadorId);
+
+      match /alumnos/{alumnoId} {
+        allow read, update: if esEsteEntrenador(entrenadorId) || esEsteAlumno(entrenadorId, alumnoId);
+        allow create: if estaAutenticado(); // se crea durante el registro del alumno
+        allow delete: if esEsteEntrenador(entrenadorId);
+
+        match /registros/{registroId} {
+          allow read: if esEsteEntrenador(entrenadorId) || esEsteAlumno(entrenadorId, alumnoId);
+          allow create: if esEsteAlumno(entrenadorId, alumnoId);
+        }
+
+        match /pesos/{pesoId} {
+          allow read: if esEsteEntrenador(entrenadorId) || esEsteAlumno(entrenadorId, alumnoId);
+          allow create: if esEsteAlumno(entrenadorId, alumnoId);
+        }
+
+        match /mensajes/{mensajeId} {
+          allow read: if esEsteEntrenador(entrenadorId) || esEsteAlumno(entrenadorId, alumnoId);
+          allow create: if esEsteEntrenador(entrenadorId) || esEsteAlumno(entrenadorId, alumnoId);
+        }
+      }
+
+      match /rutinas/{rutinaId} {
+        allow read: if esEsteEntrenador(entrenadorId) ||
+                     (estaAutenticado() && usuario().rol == 'alumno' && usuario().entrenadorId == entrenadorId);
+        allow write: if esEsteEntrenador(entrenadorId);
+      }
+
+      match /plantillas/{plantillaId} {
+        allow read, write: if esEsteEntrenador(entrenadorId);
+      }
+
+      match /videos/{videoId} {
+        allow read: if estaAutenticado() && usuario().entrenadorId == entrenadorId;
+        allow write: if esEsteEntrenador(entrenadorId);
+      }
+    }
+  }
+}
