@@ -136,7 +136,7 @@
           <div class="exercise-row" onclick="toggleEjercicio(${i})">
             <div>
               <div class="ex-name">${ex.nombre}</div>
-              <div class="ex-target">${ex.target || ''}</div>
+              <div class="ex-target">${ex.series} series × ${ex.reps}</div>
             </div>
             <div class="caret">▾</div>
           </div>
@@ -157,7 +157,8 @@
       panel.innerHTML = `<div class="record-line">Cargando récord…</div>`;
 
       const record = await obtenerRecord(entrenadorIdActual, alumnoIdActual, ex.ejercicioId);
-      panel.dataset.sets = JSON.stringify([{ peso: '', reps: '' }]);
+      const numSets = ex.series && ex.series > 0 ? ex.series : 1;
+      panel.dataset.sets = JSON.stringify(Array.from({ length: numSets }, () => ({ peso: '', reps: '' })));
       renderLogPanel(i, record);
     };
 
@@ -223,7 +224,8 @@
         }
         showToast('Series guardadas ✅');
         const record = await obtenerRecord(entrenadorIdActual, alumnoIdActual, ex.ejercicioId);
-        panel.dataset.sets = JSON.stringify([{ peso: '', reps: '' }]);
+        const numSets = ex.series && ex.series > 0 ? ex.series : 1;
+        panel.dataset.sets = JSON.stringify(Array.from({ length: numSets }, () => ({ peso: '', reps: '' })));
         renderLogPanel(i, record);
       } catch (err) {
         showToast('No se pudo guardar: ' + err.message);
