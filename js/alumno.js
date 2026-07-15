@@ -1,7 +1,10 @@
-import { db } from "./firebase-config.js";
+import { db, storage } from "./firebase-config.js";
 import {
-  doc, getDoc, collection, addDoc, updateDoc, deleteDoc, query, where, getDocs
+  doc, getDoc, updateDoc, collection, addDoc, deleteDoc, query, where, getDocs, orderBy
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  ref, uploadBytes, getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 // ---- Ficha del alumno dentro de su entrenador ----
 export async function obtenerAlumno(entrenadorId, alumnoId) {
@@ -59,4 +62,31 @@ export async function actualizarRegistro(entrenadorId, alumnoId, registroId, { p
 // ---- Borrar un registro guardado por error ----
 export async function eliminarRegistro(entrenadorId, alumnoId, registroId) {
   await deleteDoc(doc(db, "entrenadores", entrenadorId, "alumnos", alumnoId, "registros", registroId));
+}
+
+// ---- Subir una foto de progreso (antes/hoy) y guardar su URL en la ficha del alumno ----
+export async function subirFotoProgreso(entrenadorId, alumnoId, tipo, archivo) {
+  const storageRef = ref(storage, `entrenadores/${entrenadorId}/alumnos/${alumnoId}/fotos/${tipo}.jpg`);
+  await uploadBytes(storageRef, archivo);
+  const url = await getDownloadURL(storageRef);
+  const campo = tipo === 'antes' ? 'fotoAntesUrl' : 'fotoHoyUrl';
+  await updateDoc(doc(db, "entrenadores", entrenadorId, "alumnos", alumnoId), { [campo]: url });
+  return url;
+}
+
+// ---- Guardar un nuevo peso corporal ----
+export async function guardarPeso(entrenadorId, alumnoId, kg) {
+  await addDoc(collection(db, "entrenadores", entrenadorId, "alumnos", alumnoId, "pesos"), {
+    kg, fecha: new Date()
+  });
+}
+
+// ---- Historial de peso corporal, ordenado del más antiguo al más reciente ----
+export async function obtenerPesos(entrenadorId, alumnoId) {
+  const q = query(
+    collection(db, "entrenadores", entrenadorId, "alumnos", alumnoId, "pesos"),
+    orderBy("fecha", "asc")
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
