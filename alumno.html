@@ -74,6 +74,25 @@
   .loading{ text-align:center; padding:60px 0; color:var(--text-dim); font-size:0.85rem; }
   .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0; background:var(--side-bg); color:#fff; padding:12px 20px; border-radius:10px; font-size:0.85rem; font-weight:600; transition:opacity .25s, transform .25s; pointer-events:none; z-index:50; }
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  .progress-pair{ display:flex; gap:12px; margin-bottom:12px; }
+  .photo-slot{ flex:1; aspect-ratio: 3/4; border-radius:12px; border:1px solid var(--line); background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-dim); font-size:0.76rem; gap:6px; cursor:pointer; position:relative; overflow:hidden; }
+  .photo-slot img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .photo-slot .label{ position:absolute; top:8px; left:8px; font-size:0.6rem; font-weight:800; letter-spacing:0.06em; background:var(--side-bg); color:#fff; padding:3px 8px; border-radius:6px; z-index:2; }
+  .photo-slot .plus{ font-size:1.4rem; color:var(--text-dim); }
+  .privacy-note{ color:var(--text-dim); font-size:0.74rem; margin-bottom:16px; }
+
+  .stat-row{ display:flex; gap:10px; margin-bottom:14px; }
+  .stat-card{ flex:1; background:#fff; border:1px solid var(--line); border-radius:11px; padding:12px; }
+  .stat-num{ font-size:1.1rem; font-weight:800; }
+  .stat-num.up{ color:var(--good); }
+  .stat-label{ font-size:0.68rem; color:var(--text-dim); margin-top:2px; }
+
+  .chart-card{ background:#fff; border:1px solid var(--line); border-radius:11px; padding:12px; margin-bottom:12px; }
+  .chart-card svg{ width:100%; height:100px; display:block; }
+  .weight-form{ display:flex; gap:8px; }
+  .weight-form input{ background:#fff; border:1px solid var(--line); border-radius:8px; padding:9px; font-size:0.82rem; flex:1; }
+  .weight-form input[type=number]{ max-width:80px; }
 </style>
 </head>
 <body>
@@ -89,6 +108,28 @@
       <div class="lbl" id="hero-lbl">Tu entrenador</div>
       <h1 id="hero-nombre">—</h1>
       <p id="hero-sub"></p>
+    </div>
+
+    <div class="card">
+      <h3>Tu progreso</h3>
+      <div class="stat-row" id="stat-row"></div>
+      <div class="progress-pair">
+        <div class="photo-slot" id="slot-antes" onclick="document.getElementById('file-antes').click()">
+          <span class="label">ANTES</span><span class="plus">＋</span><span>Subir foto</span>
+        </div>
+        <div class="photo-slot" id="slot-hoy" onclick="document.getElementById('file-hoy').click()">
+          <span class="label">HOY</span><span class="plus">＋</span><span>Subir foto</span>
+        </div>
+      </div>
+      <input type="file" accept="image/*" id="file-antes" style="display:none;" onchange="subirFoto('antes', this.files[0])">
+      <input type="file" accept="image/*" id="file-hoy" style="display:none;" onchange="subirFoto('hoy', this.files[0])">
+      <p class="privacy-note">Tus fotos son privadas: solo tú y tu entrenador podéis verlas.</p>
+
+      <div class="chart-card"><svg id="weight-chart" viewBox="0 0 320 100" preserveAspectRatio="none"></svg></div>
+      <div class="weight-form">
+        <input type="number" step="0.1" id="w-kg" placeholder="Peso de hoy (kg)">
+        <button class="log-save" style="width:auto; padding:9px 16px;" onclick="registrarPeso()">Guardar</button>
+      </div>
     </div>
 
     <div class="card">
@@ -108,7 +149,7 @@
 
   <script type="module">
     import { escucharSesion, logout } from "./js/auth.js";
-    import { obtenerAlumno, obtenerRutinaActiva, obtenerRecord, registrarSerie, obtenerHistorial, actualizarRegistro, eliminarRegistro } from "./js/alumno.js";
+    import { obtenerAlumno, obtenerRutinaActiva, obtenerRecord, registrarSerie, obtenerHistorial, actualizarRegistro, eliminarRegistro, subirFotoProgreso, guardarPeso, obtenerPesos } from "./js/alumno.js";
 
     window.cerrarSesion = () => logout();
 
@@ -125,6 +166,84 @@
     let alumnoIdActual = null;
     let diasActuales = [];
     let diaSeleccionado = 0;
+    let pesosActuales = [];
+
+    window.subirFoto = async (tipo, archivo) => {
+      if (!archivo) return;
+      const slot = document.getElementById('slot-' + tipo);
+      slot.innerHTML = `<span style="font-size:0.72rem; color:var(--text-dim);">Subiendo…</span>`;
+      try {
+        const url = await subirFotoProgreso(entrenadorIdActual, alumnoIdActual, tipo, archivo);
+        slot.innerHTML = `<span class="label">${tipo === 'antes' ? 'ANTES' : 'HOY'}</span><img src="${url}">`;
+        showToast('Foto subida.');
+      } catch (err) {
+        slot.innerHTML = `<span class="label">${tipo === 'antes' ? 'ANTES' : 'HOY'}</span><span class="plus">＋</span><span>Subir foto</span>`;
+        showToast('No se pudo subir: ' + err.message);
+      }
+    };
+
+    window.registrarPeso = async () => {
+      const kg = parseFloat(document.getElementById('w-kg').value);
+      if (!kg) { showToast('Pon un peso válido.'); return; }
+      try {
+        await guardarPeso(entrenadorIdActual, alumnoIdActual, kg);
+        document.getElementById('w-kg').value = '';
+        showToast('Peso guardado.');
+        pesosActuales = await obtenerPesos(entrenadorIdActual, alumnoIdActual);
+        renderStats();
+        renderWeightChart();
+      } catch (err) {
+        showToast('No se pudo guardar: ' + err.message);
+      }
+    };
+
+    function renderStats(){
+      const row = document.getElementById('stat-row');
+      if (pesosActuales.length === 0) { row.innerHTML = ''; return; }
+      const actual = pesosActuales[pesosActuales.length - 1].kg;
+      const inicial = pesosActuales[0].kg;
+      const dif = (actual - inicial).toFixed(1);
+      row.innerHTML = `
+        <div class="stat-card"><div class="stat-num ${dif <= 0 ? 'up' : ''}">${dif > 0 ? '+' : ''}${dif} kg</div><div class="stat-label">Desde el inicio</div></div>
+        <div class="stat-card"><div class="stat-num">${actual} kg</div><div class="stat-label">Peso actual</div></div>
+      `;
+    }
+
+    function renderWeightChart(){
+      const svg = document.getElementById('weight-chart');
+      if (pesosActuales.length < 2) {
+        svg.innerHTML = `<text x="10" y="55" fill="#9AA0AA" font-size="11">Añade al menos 2 pesos para ver el gráfico</text>`;
+        return;
+      }
+      const w = 320, h = 100, pad = 10;
+      const kgs = pesosActuales.map(p => p.kg);
+      const min = Math.min(...kgs) - 0.5, max = Math.max(...kgs) + 0.5;
+      const stepX = (w - 2 * pad) / (pesosActuales.length - 1);
+      const points = pesosActuales.map((p, i) => {
+        const x = pad + i * stepX;
+        const y = h - pad - ((p.kg - min) / (max - min)) * (h - 2 * pad);
+        return [x, y];
+      });
+      const pathD = points.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+      const areaD = pathD + ` L${points[points.length-1][0].toFixed(1)},${h-pad} L${points[0][0].toFixed(1)},${h-pad} Z`;
+      svg.innerHTML = `
+        <defs><linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#5ACAE4" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="#5ACAE4" stop-opacity="0"/>
+        </linearGradient></defs>
+        <path d="${areaD}" fill="url(#grad)" stroke="none"/>
+        <path d="${pathD}" fill="none" stroke="#1F8FAE" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        ${points.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="3.2" fill="#5ACAE4" stroke="#fff" stroke-width="1.2"/>`).join('')}
+      `;
+    }
+
+    async function cargarProgreso(alumno){
+      if (alumno.fotoAntesUrl) document.getElementById('slot-antes').innerHTML = `<span class="label">ANTES</span><img src="${alumno.fotoAntesUrl}">`;
+      if (alumno.fotoHoyUrl) document.getElementById('slot-hoy').innerHTML = `<span class="label">HOY</span><img src="${alumno.fotoHoyUrl}">`;
+      pesosActuales = await obtenerPesos(entrenadorIdActual, alumnoIdActual);
+      renderStats();
+      renderWeightChart();
+    }
 
     function renderDayStrip(){
       document.getElementById('day-strip').innerHTML = diasActuales.map((d, i) =>
@@ -349,6 +468,7 @@
         const alumno = await obtenerAlumno(entrenadorIdActual, alumnoIdActual);
         if (!alumno) { document.getElementById('hero-sub').textContent = 'No se encontró tu ficha de alumno.'; return; }
         document.getElementById('hero-sub').textContent = `Hola, ${alumno.nombre.split(' ')[0]}`;
+        await cargarProgreso(alumno);
 
         const rutinaEl = document.getElementById('rutina-content');
         if (alumno.rutinaActivaId) {
