@@ -1,0 +1,18 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Las fotos de progreso viven en una ruta que ya contiene el uid del
+    // entrenador y el uid del alumno (en este proyecto, alumnoId y
+    // entrenadorId SON uids de Firebase Auth), así que podemos comparar
+    // directamente sin tener que consultar Firestore desde aquí.
+    match /entrenadores/{entrenadorId}/alumnos/{alumnoId}/fotos/{archivo} {
+      allow read: if request.auth != null &&
+                   (request.auth.uid == alumnoId || request.auth.uid == entrenadorId);
+      allow write: if request.auth != null && request.auth.uid == alumnoId
+                    && request.resource.size < 8 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+    }
+  }
+}
